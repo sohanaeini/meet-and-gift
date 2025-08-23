@@ -14,7 +14,160 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          created_at: string | null
+          id: string
+          invite_id: string
+          invitee_id: string
+          scheduled_at: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          invite_id: string
+          invitee_id: string
+          scheduled_at: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          invite_id?: string
+          invitee_id?: string
+          scheduled_at?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_invite_id_fkey"
+            columns: ["invite_id"]
+            isOneToOne: false
+            referencedRelation: "invites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invites: {
+        Row: {
+          amount: number
+          created_at: string | null
+          creator_id: string
+          currency: string | null
+          description: string | null
+          duration_minutes: number | null
+          id: string
+          meeting_confirmed: boolean | null
+          payment_held: boolean | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          creator_id: string
+          currency?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          meeting_confirmed?: boolean | null
+          payment_held?: boolean | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          creator_id?: string
+          currency?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          id?: string
+          meeting_confirmed?: boolean | null
+          payment_held?: boolean | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      mock_payments: {
+        Row: {
+          amount: number
+          card_last_four: string | null
+          created_at: string | null
+          currency: string | null
+          id: string
+          invite_id: string
+          status: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          card_last_four?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          invite_id: string
+          status?: string | null
+          stripe_payment_intent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          card_last_four?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          invite_id?: string
+          status?: string | null
+          stripe_payment_intent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_payments_invite_id_fkey"
+            columns: ["invite_id"]
+            isOneToOne: false
+            referencedRelation: "invites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
