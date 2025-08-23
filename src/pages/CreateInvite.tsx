@@ -140,7 +140,7 @@ const CreateInvite = () => {
 
       toast({
         title: 'Success!',
-        description: 'Your invite has been created and payment is held in escrow.',
+        description: 'Your meeting request has been created and payment is held in escrow.',
       });
 
       navigate(`/invite/${inviteData.id}`);
@@ -172,8 +172,8 @@ const CreateInvite = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Home
           </Button>
-          <h1 className="text-3xl font-bold">Create Meeting Invite</h1>
-          <p className="text-muted-foreground">Set up a paid meeting invitation</p>
+          <h1 className="text-3xl font-bold">Offer Payment for Meeting</h1>
+          <p className="text-muted-foreground">Request someone's time by offering secure payment</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -185,7 +185,7 @@ const CreateInvite = () => {
                 Meeting Details
               </CardTitle>
               <CardDescription>
-                Provide information about the meeting you're requesting
+                Describe the meeting you want to have and what you hope to discuss
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -253,7 +253,7 @@ const CreateInvite = () => {
                 Payment Information
               </CardTitle>
               <CardDescription>
-                Your card will be charged only when the meeting is confirmed
+                Payment is held in escrow and released when the meeting is completed
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -325,7 +325,7 @@ const CreateInvite = () => {
                 Creating Invite...
               </>
             ) : (
-              'Create Invite & Hold Payment'
+              'Create Request & Hold Payment'
             )}
           </Button>
         </form>

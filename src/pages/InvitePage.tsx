@@ -21,10 +21,6 @@ interface Invite {
   creator_id: string;
   payment_held: boolean;
   meeting_confirmed: boolean;
-  profiles: {
-    full_name: string;
-    email: string;
-  } | null;
   bookings?: Booking[];
 }
 
@@ -55,7 +51,6 @@ const InvitePage = () => {
         .from('invites')
         .select(`
           *,
-          profiles(full_name, email),
           bookings(
             id,
             scheduled_at,
@@ -255,7 +250,7 @@ const InvitePage = () => {
               <div>
                 <CardTitle className="text-2xl">{invite.title}</CardTitle>
               <CardDescription className="text-base mt-2">
-                Meeting request by {invite.profiles?.full_name || 'Unknown User'}
+                Someone is offering to pay for your time!
               </CardDescription>
               </div>
               <Badge variant={invite.status === 'completed' ? 'default' : 'secondary'}>
@@ -282,7 +277,7 @@ const InvitePage = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span>{invite.profiles?.email || 'No email'}</span>
+                <span>Payment guaranteed</span>
               </div>
             </div>
           </CardContent>
