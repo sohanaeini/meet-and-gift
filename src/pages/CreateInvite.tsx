@@ -8,7 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, CreditCard, Shield, Clock } from 'lucide-react';
+import { ArrowLeft, CreditCard, Shield, Clock, Calendar, Plus, X } from 'lucide-react';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
 const CreateInvite = () => {
@@ -26,6 +29,7 @@ const CreateInvite = () => {
     cvv: '',
     cardholderName: ''
   });
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<Date[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -116,7 +120,8 @@ const CreateInvite = () => {
             description: formData.description || null,
             amount: parseFloat(formData.amount),
             duration_minutes: parseInt(formData.duration),
-            payment_held: true
+            payment_held: true,
+            available_time_slots: availableTimeSlots.map(slot => slot.toISOString())
           }
         ])
         .select()
@@ -251,6 +256,64 @@ const CreateInvite = () => {
                   />
                 </div>
               </div>
+              
+              <div>
+                <Label>Available Time Slots *</Label>
+                <div className="space-y-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left">
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Add time slot
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <CalendarPicker
+                        mode="single"
+                        selected={undefined}
+                        onSelect={(date) => {
+                          if (date && !availableTimeSlots.find(slot => slot.toDateString() === date.toDateString())) {
+                            // For MVP, add slots at 9 AM, 2 PM, and 5 PM for selected date
+                            const slots = [9, 14, 17].map(hour => {
+                              const slot = new Date(date);
+                              slot.setHours(hour, 0, 0, 0);
+                              return slot;
+                            });
+                            setAvailableTimeSlots(prev => [...prev, ...slots]);
+                          }
+                        }}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {availableTimeSlots.length > 0 && (
+                    <div className="border rounded-lg p-3 bg-muted/30">
+                      <p className="text-sm font-medium mb-2">Selected Time Slots:</p>
+                      <div className="space-y-1">
+                        {availableTimeSlots.map((slot, index) => (
+                          <div key={index} className="flex items-center justify-between text-sm">
+                            <span>{format(slot, 'MMM d, yyyy \'at\' h:mm a')}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setAvailableTimeSlots(prev => prev.filter((_, i) => i !== index))}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {availableTimeSlots.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Add at least one time slot for people to book</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -327,7 +390,7 @@ const CreateInvite = () => {
           <Button 
             type="submit" 
             className="w-full h-12 text-lg"
-            disabled={isSubmitting}
+            disabled={isSubmitting || availableTimeSlots.length === 0}
             style={{ background: 'var(--gradient-trust)' }}
           >
             {isSubmitting ? (

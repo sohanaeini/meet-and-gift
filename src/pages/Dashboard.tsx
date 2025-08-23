@@ -207,6 +207,7 @@ const Dashboard = () => {
         <Tabs defaultValue="invites" className="w-full">
           <TabsList>
             <TabsTrigger value="invites">My Requests</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming Meetings</TabsTrigger>
             <TabsTrigger value="bookings">Meetings I'm Paid For</TabsTrigger>
           </TabsList>
           
@@ -229,8 +230,8 @@ const Dashboard = () => {
                   <div className="space-y-4">
                     {invites.map((invite) => {
                       const hasBooking = invite.bookings && invite.bookings.length > 0;
-                      const statusText = invite.status === 'active' ? 'Pending Acceptance' :
-                                       invite.status === 'booked' ? 'Scheduled' :
+                      const statusText = invite.status === 'active' && !hasBooking ? 'Pending Acceptance' :
+                                       invite.status === 'booked' || (invite.status === 'active' && hasBooking) ? 'Scheduled' :
                                        invite.status === 'completed' ? 'Completed' : 
                                        invite.status.charAt(0).toUpperCase() + invite.status.slice(1);
                       
@@ -260,6 +261,73 @@ const Dashboard = () => {
                     })}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="upcoming" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming Meetings</CardTitle>
+                <CardDescription>All your scheduled meetings (both as requester and invitee)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const upcomingMeetings = [
+                    ...invites.filter(invite => 
+                      invite.bookings?.some(b => new Date(b.scheduled_at) > new Date() && b.status !== 'cancelled')
+                    ).map(invite => ({
+                      type: 'request',
+                      id: invite.id,
+                      title: invite.title,
+                      amount: invite.amount,
+                      scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                      status: invite.bookings?.[0]?.status,
+                      role: 'Requester'
+                    })),
+                    ...bookings.filter(booking => 
+                      new Date(booking.scheduled_at) > new Date() && booking.status !== 'cancelled'
+                    ).map(booking => ({
+                      type: 'booking',
+                      id: booking.id,
+                      title: booking.invites?.title,
+                      amount: booking.invites?.amount,
+                      scheduled_at: booking.scheduled_at,
+                      status: booking.status,
+                      role: 'Invitee'
+                    }))
+                  ];
+
+                  return upcomingMeetings.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Clock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No upcoming meetings scheduled</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {upcomingMeetings.map((meeting, index) => (
+                        <div key={`${meeting.type}-${meeting.id}-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{meeting.title}</h3>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>${meeting.amount} {meeting.role === 'Requester' ? 'paying' : 'earning'}</span>
+                              <span>{format(new Date(meeting.scheduled_at!), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              <Badge variant="secondary">{meeting.role}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="default">Upcoming</Badge>
+                            {meeting.type === 'request' && (
+                              <Button variant="outline" size="sm" asChild>
+                                <Link to={`/invite/${meeting.id}`}>View</Link>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

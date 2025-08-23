@@ -55,6 +55,7 @@ export type Database = {
       invites: {
         Row: {
           amount: number
+          available_time_slots: Json | null
           created_at: string | null
           creator_id: string
           currency: string | null
@@ -69,6 +70,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          available_time_slots?: Json | null
           created_at?: string | null
           creator_id: string
           currency?: string | null
@@ -83,6 +85,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          available_time_slots?: Json | null
           created_at?: string | null
           creator_id?: string
           currency?: string | null

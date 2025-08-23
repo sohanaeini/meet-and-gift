@@ -21,6 +21,7 @@ interface Invite {
   creator_id: string;
   payment_held: boolean;
   meeting_confirmed: boolean;
+  available_time_slots?: string[];
   bookings?: Booking[];
 }
 
@@ -124,7 +125,7 @@ const InvitePage = () => {
 
     setIsConfirming(true);
     try {
-      // Update invite as confirmed
+      // Update invite as confirmed and booking as completed
       const { error: updateError } = await supabase
         .from('invites')
         .update({ 
@@ -134,6 +135,14 @@ const InvitePage = () => {
         .eq('id', inviteId);
 
       if (updateError) throw updateError;
+
+      // Update booking status to completed
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({ status: 'completed' })
+        .eq('invite_id', inviteId);
+
+      if (bookingUpdateError) throw bookingUpdateError;
 
       // Mock payment release
       console.log('Mock Stripe Payment Release:', {
@@ -338,11 +347,33 @@ const InvitePage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <DateTimePicker
-                date={selectedDate}
-                setDate={setSelectedDate}
-                placeholder="Choose date and time"
-              />
+              {invite.available_time_slots && invite.available_time_slots.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Choose from available time slots:</p>
+                  <div className="grid gap-2">
+                    {invite.available_time_slots.map((slot, index) => {
+                      const slotDate = new Date(slot);
+                      const isSelected = selectedDate?.toISOString() === slot;
+                      return (
+                        <Button
+                          key={index}
+                          variant={isSelected ? "default" : "outline"}
+                          onClick={() => setSelectedDate(slotDate)}
+                          className="justify-start"
+                        >
+                          {format(slotDate, 'MMM d, yyyy \'at\' h:mm a')}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <DateTimePicker
+                  date={selectedDate}
+                  setDate={setSelectedDate}
+                  placeholder="Choose date and time"
+                />
+              )}
               <Button 
                 onClick={handleBookMeeting}
                 disabled={!selectedDate || isBooking}
@@ -388,7 +419,24 @@ const InvitePage = () => {
                     </>
                   )}
                 </Button>
-                <Button variant="outline" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={() => {
+                    // Cancel the payment hold and update status
+                    supabase
+                      .from('invites')
+                      .update({ status: 'cancelled' })
+                      .eq('id', inviteId)
+                      .then(() => {
+                        toast({
+                          title: 'Meeting Cancelled',
+                          description: 'Payment hold has been released.',
+                        });
+                        fetchInvite();
+                      });
+                  }}
+                >
                   <XCircle className="mr-2 h-4 w-4" />
                   No, Cancel
                 </Button>
