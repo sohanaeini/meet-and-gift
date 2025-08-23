@@ -157,22 +157,36 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Invites</CardTitle>
+              <CardTitle className="text-sm font-medium">Active Requests</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{invites.filter(i => i.status === 'active').length}</div>
+              <p className="text-xs text-muted-foreground">Awaiting acceptance</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                ${invites.filter(i => i.status === 'completed').reduce((acc, i) => acc + i.amount, 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">On completed meetings</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Earned</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 ${bookings.filter(b => b.status === 'completed').reduce((acc, b) => acc + (b.invites?.amount || 0), 0)}
               </div>
+              <p className="text-xs text-muted-foreground">From accepted meetings</p>
             </CardContent>
           </Card>
           <Card>
@@ -182,65 +196,68 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {bookings.filter(b => new Date(b.scheduled_at) > new Date() && b.status === 'scheduled').length}
+                {[...invites.filter(i => i.bookings?.some(b => new Date(b.scheduled_at) > new Date())), 
+                  ...bookings.filter(b => new Date(b.scheduled_at) > new Date())].length}
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{bookings.length}</div>
+              <p className="text-xs text-muted-foreground">Scheduled meetings</p>
             </CardContent>
           </Card>
         </div>
 
         <Tabs defaultValue="invites" className="w-full">
           <TabsList>
-            <TabsTrigger value="invites">My Invites</TabsTrigger>
-            <TabsTrigger value="bookings">My Bookings</TabsTrigger>
+            <TabsTrigger value="invites">My Requests</TabsTrigger>
+            <TabsTrigger value="bookings">Meetings I'm Paid For</TabsTrigger>
           </TabsList>
           
           <TabsContent value="invites" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Meeting Invites</CardTitle>
-                <CardDescription>Invites you've created for paid meetings</CardDescription>
+                <CardTitle>Meeting Requests</CardTitle>
+                <CardDescription>People you want to meet by offering payment</CardDescription>
               </CardHeader>
               <CardContent>
                 {invites.length === 0 ? (
                   <div className="text-center py-8">
                     <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No invites created yet</p>
+                    <p className="text-muted-foreground">No meeting requests yet</p>
                     <Button asChild className="mt-4">
-                      <Link to="/create-invite">Create Your First Invite</Link>
+                      <Link to="/create-invite">Create Your First Request</Link>
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {invites.map((invite) => (
-                      <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <h3 className="font-medium">{invite.title}</h3>
-                          <p className="text-sm text-muted-foreground">{invite.description}</p>
-                          <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
-                            <span>${invite.amount}</span>
-                            <span>Created {format(new Date(invite.created_at), 'MMM d, yyyy')}</span>
-                            {invite.bookings && invite.bookings.length > 0 && (
-                              <span>{invite.bookings.length} booking(s)</span>
-                            )}
+                    {invites.map((invite) => {
+                      const hasBooking = invite.bookings && invite.bookings.length > 0;
+                      const statusText = invite.status === 'active' ? 'Pending Acceptance' :
+                                       invite.status === 'booked' ? 'Scheduled' :
+                                       invite.status === 'completed' ? 'Completed' : 
+                                       invite.status.charAt(0).toUpperCase() + invite.status.slice(1);
+                      
+                      return (
+                        <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{invite.title}</h3>
+                            <p className="text-sm text-muted-foreground">{invite.description}</p>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>${invite.amount} offered</span>
+                              <span>Created {format(new Date(invite.created_at), 'MMM d, yyyy')}</span>
+                              {hasBooking && (
+                                <span>Meeting scheduled</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={invite.status === 'completed' ? 'default' : 'secondary'}>
+                              {statusText}
+                            </Badge>
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to={`/invite/${invite.id}`}>View</Link>
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          {getStatusBadge(invite.status)}
-                          <Button variant="outline" size="sm" asChild>
-                            <Link to={`/invite/${invite.id}`}>View</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -250,31 +267,40 @@ const Dashboard = () => {
           <TabsContent value="bookings" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>My Bookings</CardTitle>
-                <CardDescription>Meetings you've booked with others</CardDescription>
+                <CardTitle>Paid Meetings</CardTitle>
+                <CardDescription>Meetings where you're being paid for your time</CardDescription>
               </CardHeader>
               <CardContent>
                 {bookings.length === 0 ? (
                   <div className="text-center py-8">
                     <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No bookings yet</p>
+                    <p className="text-muted-foreground">No paid meetings yet</p>
+                    <p className="text-xs text-muted-foreground mt-2">When someone sends you a paid meeting link, it will appear here</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {bookings.map((booking) => (
-                      <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <h3 className="font-medium">{booking.invites?.title}</h3>
-                          <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
-                            <span>${booking.invites?.amount}</span>
-                            <span>{format(new Date(booking.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                    {bookings.map((booking) => {
+                      const statusText = booking.status === 'scheduled' ? 'Upcoming' :
+                                       booking.status === 'completed' ? 'Completed - Paid' :
+                                       booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+                      
+                      return (
+                        <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{booking.invites?.title}</h3>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>Earning ${booking.invites?.amount}</span>
+                              <span>{format(new Date(booking.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={booking.status === 'completed' ? 'default' : 'secondary'}>
+                              {statusText}
+                            </Badge>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          {getStatusBadge(booking.status)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

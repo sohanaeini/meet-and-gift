@@ -16,6 +16,7 @@ const CreateInvite = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
+    recipientName: '',
     title: '',
     description: '',
     amount: '',
@@ -112,7 +113,7 @@ const CreateInvite = () => {
           {
             creator_id: user?.id,
             title: formData.title,
-            description: formData.description,
+            description: formData.description || null,
             amount: parseFloat(formData.amount),
             duration_minutes: parseInt(formData.duration),
             payment_held: true
@@ -139,8 +140,8 @@ const CreateInvite = () => {
       if (paymentError) throw paymentError;
 
       toast({
-        title: 'Success!',
-        description: 'Your meeting request has been created and payment is held in escrow.',
+        title: 'Invite Created!',
+        description: 'Your meeting request is ready to share. Payment is held until meeting completion.',
       });
 
       navigate(`/invite/${inviteData.id}`);
@@ -172,8 +173,8 @@ const CreateInvite = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Home
           </Button>
-          <h1 className="text-3xl font-bold">Offer Payment for Meeting</h1>
-          <p className="text-muted-foreground">Request someone's time by offering secure payment</p>
+          <h1 className="text-3xl font-bold">Create Meeting Request</h1>
+          <p className="text-muted-foreground">Offer payment to get time with someone you want to meet</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -190,22 +191,32 @@ const CreateInvite = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="title">Meeting Title *</Label>
+                <Label htmlFor="recipientName">Recipient Name</Label>
+                <Input
+                  id="recipientName"
+                  name="recipientName"
+                  placeholder="e.g., Sarah Johnson (optional - leave blank for 'anyone with link')"
+                  value={formData.recipientName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div>
+                <Label htmlFor="title">Reason for Meeting *</Label>
                 <Input
                   id="title"
                   name="title"
-                  placeholder="e.g., Strategy Discussion, Product Feedback"
+                  placeholder="e.g., Want to discuss product strategy, Get career advice"
                   value={formData.title}
                   onChange={handleInputChange}
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">Additional Details</Label>
                 <Textarea
                   id="description"
                   name="description"
-                  placeholder="Describe what you'd like to discuss..."
+                  placeholder="Any additional context about what you'd like to discuss..."
                   value={formData.description}
                   onChange={handleInputChange}
                   rows={3}
@@ -213,7 +224,7 @@ const CreateInvite = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="amount">Payment Amount ($) *</Label>
+                  <Label htmlFor="amount">Gift/Payment Amount ($) *</Label>
                   <Input
                     id="amount"
                     name="amount"
@@ -308,7 +319,7 @@ const CreateInvite = () => {
               </div>
               <div className="flex items-center space-x-2 text-sm text-muted-foreground p-3 bg-muted rounded-lg">
                 <Shield className="h-4 w-4" />
-                <span>Your payment is held securely until the meeting is confirmed</span>
+                <span>Payment is held securely and only released after the meeting is completed</span>
               </div>
             </CardContent>
           </Card>

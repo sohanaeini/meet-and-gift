@@ -250,7 +250,7 @@ const InvitePage = () => {
               <div>
                 <CardTitle className="text-2xl">{invite.title}</CardTitle>
               <CardDescription className="text-base mt-2">
-                Someone is offering to pay for your time!
+                💰 Someone wants to pay ${invite.amount} for your time!
               </CardDescription>
               </div>
               <Badge variant={invite.status === 'completed' ? 'default' : 'secondary'}>
@@ -259,12 +259,17 @@ const InvitePage = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {invite.description && (
-              <div>
-                <h4 className="font-medium mb-2">Description</h4>
-                <p className="text-muted-foreground">{invite.description}</p>
-              </div>
-            )}
+            <div className="bg-trust/5 p-4 rounded-lg border border-trust/20 mb-4">
+              <p className="text-sm text-muted-foreground mb-2">
+                Hi! I'd love to meet with you to discuss: <strong>{invite.title}</strong>
+              </p>
+              {invite.description && (
+                <p className="text-sm text-muted-foreground">{invite.description}</p>
+              )}
+              <p className="text-sm font-medium text-trust mt-2">
+                I've reserved ${invite.amount} as payment for your time.
+              </p>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center space-x-2">
@@ -277,7 +282,7 @@ const InvitePage = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span>Payment guaranteed</span>
+                <span>Payment will be sent after meeting</span>
               </div>
             </div>
           </CardContent>
@@ -327,9 +332,9 @@ const InvitePage = () => {
         {user && !isCreator && invite.status === 'active' && (
           <Card>
             <CardHeader>
-              <CardTitle>Book This Meeting</CardTitle>
+              <CardTitle>Accept This Paid Meeting</CardTitle>
               <CardDescription>
-                Select a date and time for your meeting
+                Choose when you're available - you'll be paid ${invite.amount} after the meeting
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -349,7 +354,7 @@ const InvitePage = () => {
                     Booking...
                   </>
                 ) : (
-                  `Book Meeting for $${invite.amount}`
+                  `Accept Meeting - Earn $${invite.amount}`
                 )}
               </Button>
             </CardContent>
