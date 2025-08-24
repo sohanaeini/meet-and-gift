@@ -16,6 +16,7 @@ interface Invite {
   amount: number;
   status: string;
   created_at: string;
+  creator_id: string;
   meeting_confirmed: boolean;
   bookings?: Booking[];
 }
@@ -24,6 +25,7 @@ interface Booking {
   id: string;
   scheduled_at: string;
   status: string;
+  invitee_id: string;
   invites?: {
     title: string;
     amount: number;
@@ -59,7 +61,8 @@ const Dashboard = () => {
           bookings(
             id,
             scheduled_at,
-            status
+            status,
+            invitee_id
           )
         `)
         .eq('creator_id', user?.id)
@@ -179,11 +182,9 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                     {invites.filter(invite => invite.status === 'active').map((invite) => {
-                      const hasBooking = invite.bookings && invite.bookings.length > 0;
-                      const statusText = !hasBooking ? 'Pending Acceptance' : 'Accepted - Scheduled';
-                      
-                      return (
+                     {invites.filter(invite => 
+                       invite.status === 'active' && invite.creator_id === user?.id
+                     ).map((invite) => (
                         <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex-1">
                             <h3 className="font-medium">{invite.title}</h3>
@@ -191,22 +192,16 @@ const Dashboard = () => {
                             <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
                               <span>${invite.amount} offered</span>
                               <span>Created {format(new Date(invite.created_at), 'MMM d, yyyy')}</span>
-                              {hasBooking && (
-                                <span>Meeting scheduled</span>
-                              )}
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant={invite.status === 'completed' ? 'default' : 'secondary'}>
-                              {statusText}
-                            </Badge>
+                            <Badge variant="secondary">Pending</Badge>
                             <Button variant="outline" size="sm" asChild>
                               <Link to={`/invite/${invite.id}`}>View</Link>
                             </Button>
                           </div>
                         </div>
-                      );
-                    })}
+                      ))}
                   </div>
                 )}
               </CardContent>
@@ -222,19 +217,23 @@ const Dashboard = () => {
               <CardContent>
                 {(() => {
                   const upcomingMeetings = [
+                    // Created invites that are booked (requester view)
                     ...invites.filter(invite => 
-                      invite.bookings?.some(b => new Date(b.scheduled_at) > new Date() && b.status === 'scheduled')
+                      invite.creator_id === user?.id && invite.status === 'booked'
                     ).map(invite => ({
                       type: 'request',
                       id: invite.id,
                       title: invite.title,
                       amount: invite.amount,
                       scheduled_at: invite.bookings?.[0]?.scheduled_at,
-                      status: invite.bookings?.[0]?.status,
+                      status: 'booked',
                       role: 'Requester'
                     })),
+                    // Accepted invites (invitee view)
                     ...bookings.filter(booking => 
-                      new Date(booking.scheduled_at) > new Date() && booking.status === 'scheduled'
+                      booking.invitee_id === user?.id && 
+                      booking.status !== 'completed' && 
+                      booking.status !== 'cancelled'
                     ).map(booking => ({
                       type: 'booking',
                       id: booking.id,
@@ -264,7 +263,7 @@ const Dashboard = () => {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="default">Upcoming</Badge>
+                            <Badge variant="default">Scheduled</Badge>
                             {meeting.type === 'request' && (
                               <Button variant="outline" size="sm" asChild>
                                 <Link to={`/invite/${meeting.id}`}>View</Link>
@@ -289,24 +288,30 @@ const Dashboard = () => {
               <CardContent>
                 {(() => {
                   const pastMeetings = [
+                    // Created invites that are completed or cancelled (requester view)
                     ...invites.filter(invite => 
-                      invite.status === 'completed' && invite.meeting_confirmed
+                      invite.creator_id === user?.id && 
+                      (invite.status === 'completed' || invite.status === 'cancelled')
                     ).map(invite => ({
                       type: 'request',
                       id: invite.id,
                       title: invite.title,
                       amount: invite.amount,
                       scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                      status: invite.status,
                       role: 'Requester'
                     })),
+                    // Accepted invites that are completed or cancelled (invitee view)
                     ...bookings.filter(booking => 
-                      booking.status === 'completed'
+                      booking.invitee_id === user?.id && 
+                      (booking.status === 'completed' || booking.status === 'cancelled')
                     ).map(booking => ({
                       type: 'booking',
                       id: booking.id,
                       title: booking.invites?.title,
                       amount: booking.invites?.amount,
                       scheduled_at: booking.scheduled_at,
+                      status: booking.status,
                       role: 'Invitee'
                     }))
                   ];
@@ -332,7 +337,9 @@ const Dashboard = () => {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="default">Completed</Badge>
+                            <Badge variant={meeting.status === 'completed' ? 'default' : 'destructive'}>
+                              {meeting.status === 'completed' ? 'Completed' : 'Cancelled'}
+                            </Badge>
                           </div>
                         </div>
                       ))}

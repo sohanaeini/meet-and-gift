@@ -468,18 +468,23 @@ const InvitePage = () => {
                   variant="outline" 
                   className="flex-1"
                   onClick={() => {
-                    // Cancel the payment hold and update status
-                    supabase
-                      .from('invites')
-                      .update({ status: 'cancelled' })
-                      .eq('id', inviteId)
-                      .then(() => {
-                        toast({
-                          title: 'Meeting Cancelled',
-                          description: 'Payment hold has been released.',
-                        });
-                        fetchInvite();
+                    // Cancel the meeting and update both invite and booking status
+                    Promise.all([
+                      supabase
+                        .from('invites')
+                        .update({ status: 'cancelled' })
+                        .eq('id', inviteId),
+                      supabase
+                        .from('bookings')
+                        .update({ status: 'cancelled' })
+                        .eq('invite_id', inviteId)
+                    ]).then(() => {
+                      toast({
+                        title: 'Meeting Cancelled',
+                        description: 'Payment hold has been released.',
                       });
+                      fetchInvite();
+                    });
                   }}
                 >
                   <XCircle className="mr-2 h-4 w-4" />
