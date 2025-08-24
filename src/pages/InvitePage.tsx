@@ -122,7 +122,12 @@ const InvitePage = () => {
         .update({ status: 'booked' })
         .eq('id', inviteId);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating invite status:', updateError);
+        throw updateError;
+      }
+
+      console.log('Successfully updated invite status to booked for invite:', inviteId);
 
       toast({
         title: 'Success!',

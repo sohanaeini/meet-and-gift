@@ -71,6 +71,18 @@ const Dashboard = () => {
     }
   }, [location.pathname, user]);
 
+  // Add visibility change listener for better real-time updates
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        fetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
+
   const fetchData = async () => {
     try {
       // Fetch user's created invites
