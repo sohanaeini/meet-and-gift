@@ -84,6 +84,7 @@ const Dashboard = () => {
   }, [user]);
 
   const fetchData = async () => {
+    setLoadingData(true);
     try {
       // Fetch user's created invites
       const { data: invitesData, error: invitesError } = await supabase
@@ -116,6 +117,12 @@ const Dashboard = () => {
         .order('created_at', { ascending: false });
 
       if (bookingsError) throw bookingsError;
+
+      console.log('Dashboard data fetched:', {
+        invites: invitesData?.length || 0,
+        bookings: bookingsData?.length || 0,
+        inviteStatuses: invitesData?.map(i => ({ id: i.id, status: i.status, title: i.title }))
+      });
 
       setInvites(invitesData || []);
       setBookings(bookingsData || []);
