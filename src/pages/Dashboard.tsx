@@ -204,11 +204,12 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const pendingInvites = invites.filter(invite => 
-                    invite.status === 'active' && invite.creator_id === user?.id
+                  // Show ONLY invites created by user with status 'active' (not yet accepted)
+                  const myRequestsInvites = invites.filter(invite => 
+                    invite.creator_id === user?.id && invite.status === 'active'
                   );
                   
-                  return pendingInvites.length === 0 ? (
+                  return myRequestsInvites.length === 0 ? (
                     <div className="text-center py-8">
                       <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <p className="text-muted-foreground">No pending requests</p>
@@ -219,7 +220,7 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {pendingInvites.map((invite) => (
+                      {myRequestsInvites.map((invite) => (
                         <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex-1">
                             <h3 className="font-medium">{invite.title}</h3>

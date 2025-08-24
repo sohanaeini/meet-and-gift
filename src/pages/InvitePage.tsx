@@ -89,6 +89,7 @@ const InvitePage = () => {
 
     setIsBooking(true);
     try {
+      // Create booking with 'scheduled' status
       const { error: bookingError } = await supabase
         .from('bookings')
         .insert([
@@ -96,6 +97,7 @@ const InvitePage = () => {
             invite_id: inviteId,
             invitee_id: user.id,
             scheduled_at: selectedDate.toISOString(),
+            status: 'scheduled' // Explicitly set booking status
           }
         ]);
 
@@ -114,7 +116,7 @@ const InvitePage = () => {
         throw bookingError;
       }
 
-      // Update invite status to booked
+      // Update invite status to 'booked' (triggers database sync for both users)
       const { error: updateError } = await supabase
         .from('invites')
         .update({ status: 'booked' })
