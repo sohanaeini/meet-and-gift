@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Clock, Users } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Clock, Users, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Invite {
@@ -35,6 +35,7 @@ interface Booking {
 const Dashboard = () => {
   const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -50,6 +51,25 @@ const Dashboard = () => {
       fetchData();
     }
   }, [user]);
+
+  // Refetch data when component comes into focus (user returns from other pages)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        fetchData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
+
+  // Refetch data when returning to dashboard route
+  useEffect(() => {
+    if (user && location.pathname === '/dashboard') {
+      fetchData();
+    }
+  }, [location.pathname, user]);
 
   const fetchData = async () => {
     try {
@@ -149,12 +169,23 @@ const Dashboard = () => {
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Manage your meeting invites and bookings</p>
           </div>
-          <Button asChild className="bg-primary hover:bg-primary/90">
-            <Link to="/create-invite">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Invite
-            </Link>
-          </Button>
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchData}
+              disabled={loadingData}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loadingData ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link to="/create-invite">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Invite
+              </Link>
+            </Button>
+          </div>
         </div>
 
 
