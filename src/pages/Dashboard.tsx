@@ -16,6 +16,7 @@ interface Invite {
   amount: number;
   status: string;
   created_at: string;
+  meeting_confirmed: boolean;
   bookings?: Booking[];
 }
 
@@ -153,62 +154,12 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Requests</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{invites.filter(i => i.status === 'active').length}</div>
-              <p className="text-xs text-muted-foreground">Awaiting acceptance</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${invites.filter(i => i.status === 'completed').reduce((acc, i) => acc + i.amount, 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">On completed meetings</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Earned</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${bookings.filter(b => b.status === 'completed').reduce((acc, b) => acc + (b.invites?.amount || 0), 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">From accepted meetings</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Upcoming Meetings</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {[...invites.filter(i => i.bookings?.some(b => new Date(b.scheduled_at) > new Date())), 
-                  ...bookings.filter(b => new Date(b.scheduled_at) > new Date())].length}
-              </div>
-              <p className="text-xs text-muted-foreground">Scheduled meetings</p>
-            </CardContent>
-          </Card>
-        </div>
 
         <Tabs defaultValue="invites" className="w-full">
           <TabsList>
             <TabsTrigger value="invites">My Requests</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming Meetings</TabsTrigger>
-            <TabsTrigger value="bookings">Meetings I'm Paid For</TabsTrigger>
+            <TabsTrigger value="past">Past Meetings</TabsTrigger>
           </TabsList>
           
           <TabsContent value="invites" className="mt-6">
@@ -228,12 +179,9 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {invites.map((invite) => {
+                     {invites.filter(invite => invite.status === 'active').map((invite) => {
                       const hasBooking = invite.bookings && invite.bookings.length > 0;
-                      const statusText = invite.status === 'active' && !hasBooking ? 'Pending Acceptance' :
-                                       invite.status === 'booked' || (invite.status === 'active' && hasBooking) ? 'Scheduled' :
-                                       invite.status === 'completed' ? 'Completed' : 
-                                       invite.status.charAt(0).toUpperCase() + invite.status.slice(1);
+                      const statusText = !hasBooking ? 'Pending Acceptance' : 'Accepted - Scheduled';
                       
                       return (
                         <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -275,7 +223,7 @@ const Dashboard = () => {
                 {(() => {
                   const upcomingMeetings = [
                     ...invites.filter(invite => 
-                      invite.bookings?.some(b => new Date(b.scheduled_at) > new Date() && b.status !== 'cancelled')
+                      invite.bookings?.some(b => new Date(b.scheduled_at) > new Date() && b.status === 'scheduled')
                     ).map(invite => ({
                       type: 'request',
                       id: invite.id,
@@ -286,7 +234,7 @@ const Dashboard = () => {
                       role: 'Requester'
                     })),
                     ...bookings.filter(booking => 
-                      new Date(booking.scheduled_at) > new Date() && booking.status !== 'cancelled'
+                      new Date(booking.scheduled_at) > new Date() && booking.status === 'scheduled'
                     ).map(booking => ({
                       type: 'booking',
                       id: booking.id,
@@ -332,45 +280,65 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="bookings" className="mt-6">
+          <TabsContent value="past" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Paid Meetings</CardTitle>
-                <CardDescription>Meetings where you're being paid for your time</CardDescription>
+                <CardTitle>Past Meetings</CardTitle>
+                <CardDescription>All completed meetings where payment has been released</CardDescription>
               </CardHeader>
               <CardContent>
-                {bookings.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No paid meetings yet</p>
-                    <p className="text-xs text-muted-foreground mt-2">When someone sends you a paid meeting link, it will appear here</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {bookings.map((booking) => {
-                      const statusText = booking.status === 'scheduled' ? 'Upcoming' :
-                                       booking.status === 'completed' ? 'Completed - Paid' :
-                                       booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
-                      
-                      return (
-                        <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
+                {(() => {
+                  const pastMeetings = [
+                    ...invites.filter(invite => 
+                      invite.status === 'completed' && invite.meeting_confirmed
+                    ).map(invite => ({
+                      type: 'request',
+                      id: invite.id,
+                      title: invite.title,
+                      amount: invite.amount,
+                      scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                      role: 'Requester'
+                    })),
+                    ...bookings.filter(booking => 
+                      booking.status === 'completed'
+                    ).map(booking => ({
+                      type: 'booking',
+                      id: booking.id,
+                      title: booking.invites?.title,
+                      amount: booking.invites?.amount,
+                      scheduled_at: booking.scheduled_at,
+                      role: 'Invitee'
+                    }))
+                  ];
+
+                  return pastMeetings.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No completed meetings yet</p>
+                      <p className="text-xs text-muted-foreground mt-2">When meetings are completed and confirmed, they'll appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pastMeetings.map((meeting, index) => (
+                        <div key={`${meeting.type}-${meeting.id}-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex-1">
-                            <h3 className="font-medium">{booking.invites?.title}</h3>
+                            <h3 className="font-medium">{meeting.title}</h3>
                             <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
-                              <span>Earning ${booking.invites?.amount}</span>
-                              <span>{format(new Date(booking.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              <span>${meeting.amount} {meeting.role === 'Requester' ? 'paid' : 'earned'}</span>
+                              {meeting.scheduled_at && (
+                                <span>{format(new Date(meeting.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              )}
+                              <Badge variant="secondary">{meeting.role}</Badge>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant={booking.status === 'completed' ? 'default' : 'secondary'}>
-                              {statusText}
-                            </Badge>
+                            <Badge variant="default">Completed</Badge>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

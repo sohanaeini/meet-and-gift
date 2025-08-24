@@ -63,7 +63,16 @@ const Index = () => {
                 Find Someone to Pay
               </Link>
             </Button>
-            <Button size="lg" variant="outline" className="h-12 px-8 text-lg">
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="h-12 px-8 text-lg"
+              onClick={() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ 
+                  behavior: 'smooth' 
+                });
+              }}
+            >
               See How It Works
             </Button>
           </div>
@@ -71,7 +80,7 @@ const Index = () => {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 px-4">
+      <section id="how-it-works" className="py-20 px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>

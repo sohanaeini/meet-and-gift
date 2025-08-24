@@ -21,6 +21,7 @@ interface Invite {
   creator_id: string;
   payment_held: boolean;
   meeting_confirmed: boolean;
+  meeting_link?: string;
   available_time_slots?: string[];
   bookings?: Booking[];
 }
@@ -41,6 +42,7 @@ const InvitePage = () => {
   const [isBooking, setIsBooking] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [isConfirming, setIsConfirming] = useState(false);
+  const [userHasBooked, setUserHasBooked] = useState(false);
 
   useEffect(() => {
     fetchInvite();
@@ -64,6 +66,11 @@ const InvitePage = () => {
 
       if (error) throw error;
       setInvite(data as any);
+      
+      // Check if current user has already booked this invite
+      if (user && data.bookings) {
+        setUserHasBooked(data.bookings.some((booking: any) => booking.invitee_id === user.id));
+      }
     } catch (error) {
       console.error('Error fetching invite:', error);
       toast({
@@ -92,7 +99,20 @@ const InvitePage = () => {
           }
         ]);
 
-      if (bookingError) throw bookingError;
+      if (bookingError) {
+        if (bookingError.code === '23505') {
+          // Unique constraint violation - user already booked
+          toast({
+            title: 'Already Booked',
+            description: 'You have already booked this meeting.',
+            variant: 'destructive',
+          });
+          setUserHasBooked(true);
+          fetchInvite();
+          return;
+        }
+        throw bookingError;
+      }
 
       // Update invite status to booked
       const { error: updateError } = await supabase
@@ -294,6 +314,20 @@ const InvitePage = () => {
                 <span>Payment will be sent after meeting</span>
               </div>
             </div>
+            
+            {invite.meeting_link && hasBooking && (
+              <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm font-medium mb-2">Meeting Link:</p>
+                <a 
+                  href={invite.meeting_link} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-sm break-all"
+                >
+                  {invite.meeting_link}
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -338,7 +372,7 @@ const InvitePage = () => {
           </Card>
         )}
 
-        {user && !isCreator && invite.status === 'active' && (
+        {user && !isCreator && invite.status === 'active' && !userHasBooked && !hasBooking && (
           <Card>
             <CardHeader>
               <CardTitle>Accept This Paid Meeting</CardTitle>
@@ -388,6 +422,17 @@ const InvitePage = () => {
                   `Accept Meeting - Earn $${invite.amount}`
                 )}
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {user && !isCreator && (userHasBooked || hasBooking) && (
+          <Card className="border-success">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center text-success">
+                <CheckCircle2 className="mr-2 h-5 w-5" />
+                <span className="font-medium">You have already booked this meeting!</span>
+              </div>
             </CardContent>
           </Card>
         )}

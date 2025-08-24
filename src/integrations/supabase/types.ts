@@ -63,6 +63,7 @@ export type Database = {
           duration_minutes: number | null
           id: string
           meeting_confirmed: boolean | null
+          meeting_link: string | null
           payment_held: boolean | null
           status: string | null
           title: string
@@ -78,6 +79,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           meeting_confirmed?: boolean | null
+          meeting_link?: string | null
           payment_held?: boolean | null
           status?: string | null
           title: string
@@ -93,6 +95,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           meeting_confirmed?: boolean | null
+          meeting_link?: string | null
           payment_held?: boolean | null
           status?: string | null
           title?: string

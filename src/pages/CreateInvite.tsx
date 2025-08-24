@@ -23,6 +23,7 @@ const CreateInvite = () => {
     description: '',
     amount: '',
     duration: '60',
+    meetingLink: '',
     cardNumber: '',
     expiryDate: '',
     cvv: '',
@@ -131,6 +132,7 @@ const CreateInvite = () => {
             description: formData.description || null,
             amount: parseFloat(formData.amount),
             duration_minutes: parseInt(formData.duration),
+            meeting_link: formData.meetingLink,
             payment_held: true,
             available_time_slots: availableTimeSlots.map(slot => slot.toISOString())
           }
@@ -266,6 +268,18 @@ const CreateInvite = () => {
                     onChange={handleInputChange}
                   />
                 </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="meetingLink">Meeting Link *</Label>
+                <Input
+                  id="meetingLink"
+                  name="meetingLink"
+                  placeholder="https://zoom.us/j/123456789 or https://meet.google.com/abc-def-ghi"
+                  value={formData.meetingLink}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
               
               <div>
