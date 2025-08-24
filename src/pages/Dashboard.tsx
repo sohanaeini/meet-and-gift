@@ -193,29 +193,33 @@ const Dashboard = () => {
           <TabsList>
             <TabsTrigger value="invites">My Requests</TabsTrigger>
             <TabsTrigger value="upcoming">Upcoming Meetings</TabsTrigger>
-            <TabsTrigger value="past">Past Meetings</TabsTrigger>
+            <TabsTrigger value="past">Previous Meetings</TabsTrigger>
           </TabsList>
           
           <TabsContent value="invites" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Meeting Requests</CardTitle>
-                <CardDescription>People you want to meet by offering payment</CardDescription>
+                <CardTitle>My Requests</CardTitle>
+                <CardDescription>Meeting requests you've created that haven't been accepted yet</CardDescription>
               </CardHeader>
               <CardContent>
-                {invites.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No meeting requests yet</p>
-                    <Button asChild className="mt-4">
-                      <Link to="/create-invite">Create Your First Request</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                     {invites.filter(invite => 
-                       invite.status === 'active' && invite.creator_id === user?.id
-                     ).map((invite) => (
+                {(() => {
+                  const pendingInvites = invites.filter(invite => 
+                    invite.status === 'active' && invite.creator_id === user?.id
+                  );
+                  
+                  return pendingInvites.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No pending requests</p>
+                      <p className="text-xs text-muted-foreground mt-1">Once someone accepts your invite, it will move to Upcoming Meetings</p>
+                      <Button asChild className="mt-4">
+                        <Link to="/create-invite">Create Your First Request</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingInvites.map((invite) => (
                         <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex-1">
                             <h3 className="font-medium">{invite.title}</h3>
@@ -226,15 +230,16 @@ const Dashboard = () => {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="secondary">Pending</Badge>
+                            <Badge variant="secondary">Awaiting Response</Badge>
                             <Button variant="outline" size="sm" asChild>
                               <Link to={`/invite/${invite.id}`}>View</Link>
                             </Button>
                           </div>
                         </div>
                       ))}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
@@ -243,14 +248,15 @@ const Dashboard = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Upcoming Meetings</CardTitle>
-                <CardDescription>All your scheduled meetings (both as requester and invitee)</CardDescription>
+                <CardDescription>Meetings that have been scheduled and are awaiting completion</CardDescription>
               </CardHeader>
               <CardContent>
                 {(() => {
                   const upcomingMeetings = [
-                    // Created invites that are booked (requester view)
+                    // Created invites that are booked (requester view - you created the invite and someone accepted it)
                     ...invites.filter(invite => 
-                      invite.creator_id === user?.id && invite.status === 'booked'
+                      invite.creator_id === user?.id && 
+                      invite.status === 'booked'
                     ).map(invite => ({
                       type: 'request',
                       id: invite.id,
@@ -258,13 +264,13 @@ const Dashboard = () => {
                       amount: invite.amount,
                       scheduled_at: invite.bookings?.[0]?.scheduled_at,
                       status: 'booked',
-                      role: 'Requester'
+                      role: 'Requester',
+                      meeting_confirmed: invite.meeting_confirmed
                     })),
-                    // Accepted invites (invitee view)
+                    // Accepted invites (invitee view - you accepted someone's invite)
                     ...bookings.filter(booking => 
                       booking.invitee_id === user?.id && 
-                      booking.status !== 'completed' && 
-                      booking.status !== 'cancelled'
+                      booking.status === 'scheduled'
                     ).map(booking => ({
                       type: 'booking',
                       id: booking.id,
@@ -272,7 +278,8 @@ const Dashboard = () => {
                       amount: booking.invites?.amount,
                       scheduled_at: booking.scheduled_at,
                       status: booking.status,
-                      role: 'Invitee'
+                      role: 'Invitee',
+                      meeting_confirmed: false
                     }))
                   ];
 
@@ -280,6 +287,7 @@ const Dashboard = () => {
                     <div className="text-center py-8">
                       <Clock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <p className="text-muted-foreground">No upcoming meetings scheduled</p>
+                      <p className="text-xs text-muted-foreground mt-1">When someone accepts your request or you accept someone's request, it will appear here</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -289,15 +297,21 @@ const Dashboard = () => {
                             <h3 className="font-medium">{meeting.title}</h3>
                             <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
                               <span>${meeting.amount} {meeting.role === 'Requester' ? 'paying' : 'earning'}</span>
-                              <span>{format(new Date(meeting.scheduled_at!), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              {meeting.scheduled_at && (
+                                <span>{format(new Date(meeting.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              )}
                               <Badge variant="secondary">{meeting.role}</Badge>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge variant="default">Scheduled</Badge>
+                            <Badge variant="default">
+                              {meeting.role === 'Requester' ? 'Awaiting Confirmation' : 'Scheduled'}
+                            </Badge>
                             {meeting.type === 'request' && (
                               <Button variant="outline" size="sm" asChild>
-                                <Link to={`/invite/${meeting.id}`}>View</Link>
+                                <Link to={`/invite/${meeting.id}`}>
+                                  {meeting.meeting_confirmed ? 'View' : 'Confirm Meeting'}
+                                </Link>
                               </Button>
                             )}
                           </div>
@@ -313,8 +327,8 @@ const Dashboard = () => {
           <TabsContent value="past" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Past Meetings</CardTitle>
-                <CardDescription>All completed meetings where payment has been released</CardDescription>
+                <CardTitle>Previous Meetings</CardTitle>
+                <CardDescription>Completed and cancelled meetings</CardDescription>
               </CardHeader>
               <CardContent>
                 {(() => {
@@ -350,8 +364,8 @@ const Dashboard = () => {
                   return pastMeetings.length === 0 ? (
                     <div className="text-center py-8">
                       <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">No completed meetings yet</p>
-                      <p className="text-xs text-muted-foreground mt-2">When meetings are completed and confirmed, they'll appear here</p>
+                      <p className="text-muted-foreground">No previous meetings yet</p>
+                      <p className="text-xs text-muted-foreground mt-2">Completed and cancelled meetings will appear here</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -369,7 +383,7 @@ const Dashboard = () => {
                           </div>
                           <div className="flex items-center space-x-2">
                             <Badge variant={meeting.status === 'completed' ? 'default' : 'destructive'}>
-                              {meeting.status === 'completed' ? 'Completed' : 'Cancelled'}
+                              {meeting.status === 'completed' ? 'Payment Released' : 'Cancelled'}
                             </Badge>
                           </div>
                         </div>
