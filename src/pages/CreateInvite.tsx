@@ -9,8 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, CreditCard, Shield, Clock, Calendar, Plus, X } from 'lucide-react';
-import { Calendar as CalendarPicker } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 
@@ -30,6 +29,7 @@ const CreateInvite = () => {
     cardholderName: ''
   });
   const [availableTimeSlots, setAvailableTimeSlots] = useState<Date[]>([]);
+  const [newTimeSlot, setNewTimeSlot] = useState<Date>();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -74,6 +74,17 @@ const CreateInvite = () => {
       ...prev,
       expiryDate: formatted
     }));
+  };
+
+  const addTimeSlot = () => {
+    if (newTimeSlot && !availableTimeSlots.find(slot => slot.getTime() === newTimeSlot.getTime())) {
+      setAvailableTimeSlots(prev => [...prev, newTimeSlot].sort((a, b) => a.getTime() - b.getTime()));
+      setNewTimeSlot(undefined);
+    }
+  };
+
+  const removeTimeSlot = (index: number) => {
+    setAvailableTimeSlots(prev => prev.filter((_, i) => i !== index));
   };
 
   const mockStripePayment = async () => {
@@ -259,35 +270,24 @@ const CreateInvite = () => {
               
               <div>
                 <Label>Available Time Slots *</Label>
-                <div className="space-y-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Add time slot
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <CalendarPicker
-                        mode="single"
-                        selected={undefined}
-                        onSelect={(date) => {
-                          if (date && !availableTimeSlots.find(slot => slot.toDateString() === date.toDateString())) {
-                            // For MVP, add slots at 9 AM, 2 PM, and 5 PM for selected date
-                            const slots = [9, 14, 17].map(hour => {
-                              const slot = new Date(date);
-                              slot.setHours(hour, 0, 0, 0);
-                              return slot;
-                            });
-                            setAvailableTimeSlots(prev => [...prev, ...slots]);
-                          }
-                        }}
-                        disabled={(date) => date < new Date()}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
+                <div className="space-y-4">
+                  <div className="flex space-x-2">
+                    <div className="flex-1">
+                      <DateTimePicker
+                        date={newTimeSlot}
+                        setDate={setNewTimeSlot}
+                        placeholder="Select datse and time"
                       />
-                    </PopoverContent>
-                  </Popover>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={addTimeSlot}
+                      disabled={!newTimeSlot}
+                      variant="outline"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                   
                   {availableTimeSlots.length > 0 && (
                     <div className="border rounded-lg p-3 bg-muted/30">
@@ -297,9 +297,10 @@ const CreateInvite = () => {
                           <div key={index} className="flex items-center justify-between text-sm">
                             <span>{format(slot, 'MMM d, yyyy \'at\' h:mm a')}</span>
                             <Button 
+                              type="button"
                               variant="ghost" 
                               size="sm"
-                              onClick={() => setAvailableTimeSlots(prev => prev.filter((_, i) => i !== index))}
+                              onClick={() => removeTimeSlot(index)}
                             >
                               <X className="h-3 w-3" />
                             </Button>
