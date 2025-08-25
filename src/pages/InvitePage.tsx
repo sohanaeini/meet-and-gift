@@ -116,6 +116,12 @@ const InvitePage = () => {
         throw bookingError;
       }
 
+      console.log('🔄 ATTEMPTING TO UPDATE INVITE STATUS...', {
+        inviteId,
+        newStatus: 'booked',
+        currentUser: user?.id
+      });
+
       // Update invite status to 'booked' (triggers database sync for both users)
       const { error: updateError } = await supabase
         .from('invites')
@@ -123,12 +129,13 @@ const InvitePage = () => {
         .eq('id', inviteId);
 
       if (updateError) {
-        console.error('Error updating invite status:', updateError);
+        console.error('❌ ERROR updating invite status:', updateError);
         throw updateError;
       }
 
       console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
       console.log('✅ This invite should now appear in UPCOMING MEETINGS for both creator and invitee');
+      console.log('🔄 Refreshing invite data to confirm status update...');
 
       toast({
         title: 'Success!',
