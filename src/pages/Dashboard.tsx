@@ -292,13 +292,23 @@ const Dashboard = () => {
                     booking.status === 'scheduled'
                   );
                   
-                  console.log('Upcoming Meetings filtering:', {
+                  console.log('✅ UPCOMING MEETINGS FILTER RESULTS:', {
                     totalInvites: invites.length,
                     totalBookings: bookings.length,
                     createdAndBookedInvites: createdAndBookedInvites.length,
                     acceptedBookings: acceptedBookings.length,
-                    createdAndBookedDetails: createdAndBookedInvites.map(i => ({ id: i.id, status: i.status, title: i.title })),
-                    acceptedBookingDetails: acceptedBookings.map(b => ({ id: b.id, status: b.status, invites: b.invites }))
+                    createdAndBookedDetails: createdAndBookedInvites.map(i => ({ 
+                      id: i.id, 
+                      status: i.status, 
+                      title: i.title,
+                      note: 'This should show BOOKED invites created by current user'
+                    })),
+                    acceptedBookingDetails: acceptedBookings.map(b => ({ 
+                      id: b.id, 
+                      status: b.status, 
+                      invites: b.invites,
+                      note: 'This should show SCHEDULED bookings by current user'
+                    }))
                   });
                   
                   const upcomingMeetings = [

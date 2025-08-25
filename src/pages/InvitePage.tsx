@@ -127,7 +127,8 @@ const InvitePage = () => {
         throw updateError;
       }
 
-      console.log('Successfully updated invite status to booked for invite:', inviteId);
+      console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
+      console.log('✅ This invite should now appear in UPCOMING MEETINGS for both creator and invitee');
 
       toast({
         title: 'Success!',
