@@ -85,75 +85,72 @@ const InvitePage = () => {
   };
 
   const handleBookMeeting = async () => {
-    if (!selectedDate || !user) return;
+  if (!selectedDate || !user) return;
 
-    setIsBooking(true);
-    try {
-      // Update invite status to 'booked' FIRST to ensure it immediately moves to "Upcoming Meetings"
-      const { error: updateError } = await supabase
-        .from('invites')
-        .update({ status: 'booked' })
-        .eq('id', inviteId);
-
-      if (updateError) {
-        console.error('❌ ERROR updating invite status to booked:', updateError);
-        throw updateError;
-      }
-
-      console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
-
-      // Now create the booking
-      const { error: bookingError } = await supabase
-        .from('bookings')
-        .insert([
-          {
-            invite_id: inviteId,
-            invitee_id: user.id,
-            scheduled_at: selectedDate.toISOString(),
-            status: 'scheduled'
-          }
-        ]);
-
-      if (bookingError) {
-        // If booking creation fails, revert invite status back to active
-        console.error('❌ ERROR creating booking, reverting invite status:', bookingError);
-        await supabase
-          .from('invites')
-          .update({ status: 'active' })
-          .eq('id', inviteId);
-          
-        if (bookingError.code === '23505') {
-          // Unique constraint violation - user already booked
-          toast({
-            title: 'Already Booked',
-            description: 'You have already booked this meeting.',
-            variant: 'destructive',
-          });
-          setUserHasBooked(true);
-          fetchInvite();
-          return;
+  setIsBooking(true);
+  try {
+    console.log('🔄 Starting booking process for invite:', inviteId);
+    
+    // Step 1: Create the booking
+    const { error: bookingError } = await supabase
+      .from('bookings')
+      .insert([
+        {
+          invite_id: inviteId,
+          invitee_id: user.id,
+          scheduled_at: selectedDate.toISOString(),
+          status: 'scheduled'  // ✅ Set booking status to scheduled
         }
-        throw bookingError;
+      ]);
+
+    if (bookingError) {
+      if (bookingError.code === '23505') {
+        // Unique constraint violation - user already booked
+        toast({
+          title: 'Already Booked',
+          description: 'You have already booked this meeting.',
+          variant: 'destructive',
+        });
+        setUserHasBooked(true);
+        fetchInvite();
+        return;
       }
-
-      toast({
-        title: 'Success!',
-        description: 'Meeting booked successfully!',
-      });
-
-      fetchInvite(); // Refresh data
-    } catch (error) {
-      console.error('Error booking meeting:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to book meeting',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsBooking(false);
+      throw bookingError;
     }
-  };
 
+    console.log('✅ Booking created successfully');
+
+    // Step 2: Update invite status to 'booked' - THIS IS CRITICAL!
+    const { error: updateError, data: updatedInvite } = await supabase
+      .from('invites')
+      .update({ status: 'booked' })  // ✅ Change from 'active' to 'booked'
+      .eq('id', inviteId)
+      .select();
+
+    if (updateError) {
+      console.error('❌ Failed to update invite status:', updateError);
+      throw updateError;
+    }
+
+    console.log('✅ Invite status updated to booked:', updatedInvite);
+
+    toast({
+      title: 'Success!',
+      description: 'Meeting booked successfully! Both you and the requester will now see this in "Upcoming Meetings".',
+    });
+
+    fetchInvite(); // Refresh the invite data
+  } catch (error) {
+    console.error('❌ Error booking meeting:', error);
+    toast({
+      title: 'Error',
+      description: 'Failed to book meeting',
+      variant: 'destructive',
+    });
+  } finally {
+    setIsBooking(false);
+  }
+};
   const handleConfirmMeeting = async () => {
     if (!invite || !user) return;
 
