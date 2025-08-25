@@ -89,20 +89,7 @@ const InvitePage = () => {
 
     setIsBooking(true);
     try {
-      // Update invite status to 'booked' FIRST to ensure it immediately moves to "Upcoming Meetings"
-      const { error: updateError } = await supabase
-        .from('invites')
-        .update({ status: 'booked' })
-        .eq('id', inviteId);
-
-      if (updateError) {
-        console.error('❌ ERROR updating invite status to booked:', updateError);
-        throw updateError;
-      }
-
-      console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
-
-      // Now create the booking
+      // Create the booking - the trigger will automatically update invite status to 'booked'
       const { error: bookingError } = await supabase
         .from('bookings')
         .insert([
@@ -115,12 +102,7 @@ const InvitePage = () => {
         ]);
 
       if (bookingError) {
-        // If booking creation fails, revert invite status back to active
-        console.error('❌ ERROR creating booking, reverting invite status:', bookingError);
-        await supabase
-          .from('invites')
-          .update({ status: 'active' })
-          .eq('id', inviteId);
+        console.error('❌ ERROR creating booking:', bookingError);
           
         if (bookingError.code === '23505') {
           // Unique constraint violation - user already booked
@@ -135,6 +117,8 @@ const InvitePage = () => {
         }
         throw bookingError;
       }
+
+      console.log('✅ SUCCESS: Booking created, invite status updated automatically by trigger');
 
       toast({
         title: 'Success!',
