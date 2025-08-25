@@ -56,6 +56,7 @@ const Dashboard = () => {
   useEffect(() => {
     const handleFocus = () => {
       if (user) {
+        console.log('🔄 Dashboard focused, refreshing data...');
         fetchData();
       }
     };
@@ -67,6 +68,7 @@ const Dashboard = () => {
   // Refetch data when returning to dashboard route
   useEffect(() => {
     if (user && location.pathname === '/dashboard') {
+      console.log('🔄 Dashboard route accessed, refreshing data...');
       fetchData();
     }
   }, [location.pathname, user]);
@@ -75,6 +77,7 @@ const Dashboard = () => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && user) {
+        console.log('🔄 Page became visible, refreshing data...');
         fetchData();
       }
     };
@@ -83,47 +86,106 @@ const Dashboard = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user]);
 
-  // Add realtime listeners for automatic dashboard updates
+  // Enhanced real-time listeners for instant dashboard updates
   useEffect(() => {
     if (!user) return;
 
+    console.log('🔌 Setting up comprehensive real-time listeners for user:', user.id);
+
     const channel = supabase
       .channel('dashboard-updates')
+      // Listen to ALL invite changes - refresh if user created the invite OR if invite affects user's bookings
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'invites',
-          filter: `creator_id=eq.${user.id}`
+          table: 'invites'
         },
-        () => {
-          console.log('📡 Realtime update: invites changed, refreshing dashboard...');
-          fetchData();
+        async (payload) => {
+          console.log('📡 Invite change detected:', payload);
+          const invite = payload.new || payload.old;
+          
+          if (invite) {
+            // Refresh if user created this invite
+            if ((invite as any).creator_id === user.id) {
+              console.log('📡 Invite change affects current user as creator, refreshing...');
+              fetchData();
+              return;
+            }
+            
+            // Also refresh if this invite has bookings by the current user
+            // (This handles cases where invite status changes affect user's bookings)
+            try {
+              const { data: userBookings } = await supabase
+                .from('bookings')
+                .select('invite_id')
+                .eq('invitee_id', user.id)
+                .eq('invite_id', (invite as any).id);
+                
+              if (userBookings && userBookings.length > 0) {
+                console.log('📡 Invite change affects current user as invitee, refreshing...');
+                fetchData();
+              }
+            } catch (error) {
+              console.error('Error checking user bookings:', error);
+            }
+          }
         }
       )
+      // Listen to ALL booking changes
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'bookings',
-          filter: `invitee_id=eq.${user.id}`
+          table: 'bookings'
         },
-        () => {
-          console.log('📡 Realtime update: bookings changed, refreshing dashboard...');
-          fetchData();
+        async (payload) => {
+          console.log('📡 Booking change detected:', payload);
+          const booking = payload.new || payload.old;
+          
+          if (booking) {
+            // Refresh if user is the invitee
+            if ((booking as any).invitee_id === user.id) {
+              console.log('📡 Booking change affects current user as invitee, refreshing...');
+              fetchData();
+              return;
+            }
+            
+            // Also refresh if this booking is for an invite created by current user
+            try {
+              const { data: userInvite } = await supabase
+                .from('invites')
+                .select('creator_id')
+                .eq('id', (booking as any).invite_id)
+                .eq('creator_id', user.id)
+                .single();
+                
+              if (userInvite) {
+                console.log('📡 Booking change affects current user as invite creator, refreshing...');
+                fetchData();
+              }
+            } catch (error) {
+              console.error('Error checking invite creator:', error);
+            }
+          }
         }
       )
       .subscribe();
 
     return () => {
+      console.log('🔌 Cleaning up real-time listeners');
       supabase.removeChannel(channel);
     };
   }, [user]);
 
   const fetchData = async () => {
+    if (!user) return;
+    
     setLoadingData(true);
+    console.log('🔄 Fetching dashboard data for user:', user.id);
+    
     try {
       // Fetch user's created invites
       const { data: invitesData, error: invitesError } = await supabase
@@ -137,7 +199,7 @@ const Dashboard = () => {
             invitee_id
           )
         `)
-        .eq('creator_id', user?.id)
+        .eq('creator_id', user.id)
         .order('created_at', { ascending: false });
 
       if (invitesError) throw invitesError;
@@ -152,23 +214,34 @@ const Dashboard = () => {
             amount
           )
         `)
-        .eq('invitee_id', user?.id)
+        .eq('invitee_id', user.id)
         .order('created_at', { ascending: false });
 
       if (bookingsError) throw bookingsError;
 
-        console.log('Dashboard data fetched:', {
-          user: user?.id,
-          invites: invitesData?.length || 0,
-          bookings: bookingsData?.length || 0,
-          inviteStatuses: invitesData?.map(i => ({ id: i.id, status: i.status, title: i.title, creator_id: i.creator_id })),
-          bookingStatuses: bookingsData?.map(b => ({ id: b.id, status: b.status, invitee_id: b.invitee_id }))
-        });
+      console.log('✅ Dashboard data fetched successfully:', {
+        timestamp: new Date().toISOString(),
+        user: user.id,
+        invites: invitesData?.length || 0,
+        bookings: bookingsData?.length || 0,
+        inviteStatuses: invitesData?.map(i => ({ 
+          id: i.id, 
+          status: i.status, 
+          title: i.title, 
+          creator_id: i.creator_id,
+          bookings: i.bookings?.length || 0
+        })),
+        bookingStatuses: bookingsData?.map(b => ({ 
+          id: b.id, 
+          status: b.status, 
+          invitee_id: b.invitee_id 
+        }))
+      });
 
       setInvites(invitesData || []);
       setBookings(bookingsData || []);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching dashboard data:', error);
     } finally {
       setLoadingData(false);
     }
@@ -248,7 +321,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-
         <Tabs defaultValue="invites" className="w-full">
           <TabsList>
             <TabsTrigger value="invites">My Requests</TabsTrigger>
@@ -269,12 +341,16 @@ const Dashboard = () => {
                     invite.creator_id === user?.id && invite.status === 'active'
                   );
                   
-                  console.log('My Requests filtering:', {
+                  console.log('📊 My Requests filtering:', {
                     allInvites: invites.length,
                     userCreatedInvites: invites.filter(i => i.creator_id === user?.id).length,
                     activeInvites: invites.filter(i => i.creator_id === user?.id && i.status === 'active').length,
                     myRequestsInvites: myRequestsInvites.length,
-                    detailedInvites: invites.filter(i => i.creator_id === user?.id).map(i => ({ id: i.id, status: i.status, title: i.title }))
+                    detailedInvites: invites.filter(i => i.creator_id === user?.id).map(i => ({ 
+                      id: i.id, 
+                      status: i.status, 
+                      title: i.title 
+                    }))
                   });
                   
                   return myRequestsInvites.length === 0 ? (
@@ -331,7 +407,9 @@ const Dashboard = () => {
                     booking.status === 'scheduled'
                   );
                   
-                  console.log('✅ UPCOMING MEETINGS FILTER RESULTS:', {
+                  console.log('📊 UPCOMING MEETINGS ANALYSIS:', {
+                    timestamp: new Date().toISOString(),
+                    userId: user?.id,
                     totalInvites: invites.length,
                     totalBookings: bookings.length,
                     createdAndBookedInvites: createdAndBookedInvites.length,
@@ -340,13 +418,20 @@ const Dashboard = () => {
                       id: i.id, 
                       status: i.status, 
                       title: i.title,
-                      note: 'This should show BOOKED invites created by current user'
+                      bookings: i.bookings?.length || 0,
+                      note: '🎯 BOOKED invites created by current user - should show here!'
                     })),
                     acceptedBookingDetails: acceptedBookings.map(b => ({ 
                       id: b.id, 
                       status: b.status, 
-                      invites: b.invites,
-                      note: 'This should show SCHEDULED bookings by current user'
+                      title: b.invites?.title,
+                      note: '🎯 SCHEDULED bookings by current user - should show here!'
+                    })),
+                    allMyInviteStatuses: invites.filter(i => i.creator_id === user?.id).map(i => ({
+                      id: i.id,
+                      title: i.title,
+                      status: i.status,
+                      bookings: i.bookings?.length || 0
                     }))
                   });
                   
