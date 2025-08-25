@@ -1,28 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DateTimePicker } from '@/components/ui/date-time-picker';
-import { Separator } from '@/components/ui/separator';
-import { Calendar, DollarSign, Clock, User, CheckCircle2, XCircle, Copy, Share2 } from 'lucide-react';
-import { format, addDays } from 'date-fns';
-import { toast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Calendar, DollarSign, Clock, Users, RefreshCw } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface Invite {
   id: string;
   title: string;
   description: string;
   amount: number;
-  duration_minutes: number;
   status: string;
+  created_at: string;
   creator_id: string;
-  payment_held: boolean;
   meeting_confirmed: boolean;
-  meeting_link?: string;
-  available_time_slots?: string[];
   bookings?: Booking[];
 }
 
@@ -31,26 +26,127 @@ interface Booking {
   scheduled_at: string;
   status: string;
   invitee_id: string;
+  invites?: {
+    title: string;
+    amount: number;
+  };
 }
 
-const InvitePage = () => {
-  const { inviteId } = useParams();
-  const { user } = useAuth();
+const Dashboard = () => {
+  const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
-  const [invite, setInvite] = useState<Invite | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isBooking, setIsBooking] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>();
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [userHasBooked, setUserHasBooked] = useState(false);
+  const location = useLocation();
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    fetchInvite();
-  }, [inviteId]);
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
 
-  const fetchInvite = async () => {
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
+  // Refetch data when component comes into focus (user returns from other pages)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        console.log('🔄 Dashboard focused, refreshing data...');
+        fetchData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
+
+  // Refetch data when returning to dashboard route
+  useEffect(() => {
+    if (user && location.pathname === '/dashboard') {
+      console.log('🔄 Dashboard route accessed, refreshing data...');
+      fetchData();
+    }
+  }, [location.pathname, user]);
+
+  // Add visibility change listener for better real-time updates
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        console.log('🔄 Page became visible, refreshing data...');
+        fetchData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
+
+  // FIXED: More comprehensive real-time listeners
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('🔌 Setting up real-time listeners for user:', user.id);
+
+    const channel = supabase
+      .channel('dashboard-updates')
+      // Listen to ALL invite changes (not just ones created by current user)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invites'
+        },
+        (payload) => {
+          console.log('📡 Invite change detected:', payload);
+          // Refresh if this change affects current user (as creator OR if someone booked their invite)
+          const invite = payload.new || payload.old;
+          if (invite && invite.creator_id === user.id) {
+            console.log('📡 Invite change affects current user, refreshing...');
+            fetchData();
+          }
+        }
+      )
+      // Listen to ALL booking changes
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings'
+        },
+        (payload) => {
+          console.log('📡 Booking change detected:', payload);
+          // Refresh if this booking involves current user
+          const booking = payload.new || payload.old;
+          if (booking && booking.invitee_id === user.id) {
+            console.log('📡 Booking change affects current user, refreshing...');
+            fetchData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔌 Cleaning up real-time listeners');
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const fetchData = async () => {
+    if (!user) return;
+    
+    setLoadingData(true);
+    console.log('🔄 Fetching dashboard data for user:', user.id);
+    
     try {
-      const { data, error } = await supabase
+      // Fetch user's created invites
+      const { data: invitesData, error: invitesError } = await supabase
         .from('invites')
         .select(`
           *,
@@ -61,464 +157,382 @@ const InvitePage = () => {
             invitee_id
           )
         `)
-        .eq('id', inviteId)
-        .single();
+        .eq('creator_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setInvite(data as any);
-      
-      // Check if current user has already booked this invite
-      if (user && data.bookings) {
-        setUserHasBooked(data.bookings.some((booking: any) => booking.invitee_id === user.id));
-      }
-    } catch (error) {
-      console.error('Error fetching invite:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load invite',
-        variant: 'destructive',
-      });
-      navigate('/');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (invitesError) throw invitesError;
 
-  const handleBookMeeting = async () => {
-  if (!selectedDate || !user) return;
-
-  setIsBooking(true);
-  try {
-    console.log('🔄 Starting booking process for invite:', inviteId);
-    
-    // Step 1: Create the booking
-    const { error: bookingError } = await supabase
-      .from('bookings')
-      .insert([
-        {
-          invite_id: inviteId,
-          invitee_id: user.id,
-          scheduled_at: selectedDate.toISOString(),
-          status: 'scheduled'  // ✅ Set booking status to scheduled
-        }
-      ]);
-
-    if (bookingError) {
-      if (bookingError.code === '23505') {
-        // Unique constraint violation - user already booked
-        toast({
-          title: 'Already Booked',
-          description: 'You have already booked this meeting.',
-          variant: 'destructive',
-        });
-        setUserHasBooked(true);
-        fetchInvite();
-        return;
-      }
-      throw bookingError;
-    }
-
-    console.log('✅ Booking created successfully');
-
-    // Step 2: Update invite status to 'booked' - THIS IS CRITICAL!
-    const { error: updateError, data: updatedInvite } = await supabase
-      .from('invites')
-      .update({ status: 'booked' })  // ✅ Change from 'active' to 'booked'
-      .eq('id', inviteId)
-      .select();
-
-    if (updateError) {
-      console.error('❌ Failed to update invite status:', updateError);
-      throw updateError;
-    }
-
-    console.log('✅ Invite status updated to booked:', updatedInvite);
-
-    toast({
-      title: 'Success!',
-      description: 'Meeting booked successfully! Both you and the requester will now see this in "Upcoming Meetings".',
-    });
-
-    fetchInvite(); // Refresh the invite data
-  } catch (error) {
-    console.error('❌ Error booking meeting:', error);
-    toast({
-      title: 'Error',
-      description: 'Failed to book meeting',
-      variant: 'destructive',
-    });
-  } finally {
-    setIsBooking(false);
-  }
-};
-  const handleConfirmMeeting = async () => {
-    if (!invite || !user) return;
-
-    setIsConfirming(true);
-    try {
-      // Update invite as confirmed and booking as completed
-      const { error: updateError } = await supabase
-        .from('invites')
-        .update({ 
-          meeting_confirmed: true,
-          status: 'completed'
-        })
-        .eq('id', inviteId);
-
-      if (updateError) throw updateError;
-
-      // Update booking status to completed
-      const { error: bookingUpdateError } = await supabase
+      // Fetch user's bookings
+      const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .update({ status: 'completed' })
-        .eq('invite_id', inviteId);
+        .select(`
+          *,
+          invites(
+            title,
+            amount
+          )
+        `)
+        .eq('invitee_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (bookingUpdateError) throw bookingUpdateError;
+      if (bookingsError) throw bookingsError;
 
-      // Mock payment release
-      console.log('Mock Stripe Payment Release:', {
-        amount: invite.amount * 100,
-        recipient: invite.bookings?.[0]?.invitee_id
+      console.log('✅ Dashboard data fetched successfully:', {
+        timestamp: new Date().toISOString(),
+        user: user.id,
+        invites: invitesData?.length || 0,
+        bookings: bookingsData?.length || 0,
+        inviteStatuses: invitesData?.map(i => ({ 
+          id: i.id, 
+          status: i.status, 
+          title: i.title, 
+          creator_id: i.creator_id,
+          bookings: i.bookings?.length || 0
+        })),
+        bookingStatuses: bookingsData?.map(b => ({ 
+          id: b.id, 
+          status: b.status, 
+          invitee_id: b.invitee_id 
+        }))
       });
 
-      // Update payment status
-      const { error: paymentError } = await supabase
-        .from('mock_payments')
-        .update({ status: 'captured' })
-        .eq('invite_id', inviteId);
-
-      if (paymentError) throw paymentError;
-
-      toast({
-        title: 'Meeting Confirmed!',
-        description: `Payment of $${invite.amount} has been released to the invitee.`,
-      });
-
-      fetchInvite();
+      setInvites(invitesData || []);
+      setBookings(bookingsData || []);
     } catch (error) {
-      console.error('Error confirming meeting:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to confirm meeting',
-        variant: 'destructive',
-      });
+      console.error('❌ Error fetching dashboard data:', error);
     } finally {
-      setIsConfirming(false);
+      setLoadingData(false);
     }
   };
 
-  const copyInviteLink = () => {
-    const link = window.location.href;
-    navigator.clipboard.writeText(link);
-    toast({
-      title: 'Link Copied!',
-      description: 'Invite link copied to clipboard',
-    });
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, any> = {
+      active: 'default',
+      booked: 'secondary',
+      completed: 'success' as any,
+      cancelled: 'destructive',
+      scheduled: 'default'
+    };
+    return <Badge variant={variants[status] || 'default'}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>;
   };
 
-  const shareInvite = async () => {
-    const link = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: invite?.title,
-          text: `Book a paid meeting: ${invite?.title}`,
-          url: link,
-        });
-      } catch (err) {
-        copyInviteLink();
-      }
-    } else {
-      copyInviteLink();
-    }
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!invite) {
+  if (loading || loadingData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Invite Not Found</h1>
-          <p className="text-muted-foreground mb-4">This invite may have been removed or is invalid.</p>
-          <Button asChild>
-            <Link to="/">Go Home</Link>
-          </Button>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
-  const isCreator = user?.id === invite.creator_id;
-  const hasBooking = invite.bookings && invite.bookings.length > 0;
-  const booking = hasBooking ? invite.bookings[0] : null;
-
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <Button variant="ghost" asChild>
-            <Link to={user ? '/dashboard' : '/'}>
-              ← {user ? 'Back to Dashboard' : 'Back to Home'}
-            </Link>
-          </Button>
-          {isCreator && (
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm" onClick={copyInviteLink}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy Link
-              </Button>
-              <Button variant="outline" size="sm" onClick={shareInvite}>
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
+      {/* Header */}
+      <header className="border-b">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <Link to="/" className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--gradient-trust)' }}>
+              <span className="text-white font-bold">P</span>
             </div>
-          )}
+            <span className="font-bold text-xl">Pay-to-Meet</span>
+          </Link>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-muted-foreground">
+              Welcome, {user?.user_metadata?.full_name || user?.email}
+            </span>
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Manage your meeting invites and bookings</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchData}
+              disabled={loadingData}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${loadingData ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link to="/create-invite">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Invite
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        {/* Invite Details */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <div>
-                <CardTitle className="text-2xl">{invite.title}</CardTitle>
-              <CardDescription className="text-base mt-2">
-                💰 Someone wants to pay ${invite.amount} for your time!
-              </CardDescription>
-              </div>
-              <Badge variant={invite.status === 'completed' ? 'default' : 'secondary'}>
-                {invite.status.charAt(0).toUpperCase() + invite.status.slice(1)}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-trust/5 p-4 rounded-lg border border-trust/20 mb-4">
-              <p className="text-sm text-muted-foreground mb-2">
-                Hi! I'd love to meet with you to discuss: <strong>{invite.title}</strong>
-              </p>
-              {invite.description && (
-                <p className="text-sm text-muted-foreground">{invite.description}</p>
-              )}
-              <p className="text-sm font-medium text-trust mt-2">
-                I've reserved ${invite.amount} as payment for your time.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center space-x-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">${invite.amount}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>{invite.duration_minutes} minutes</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span>Payment will be sent after meeting</span>
-              </div>
-            </div>
-            
-            {invite.meeting_link && hasBooking && (
-              <div className="mt-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                <p className="text-sm font-medium mb-2">Meeting Link:</p>
-                <a 
-                  href={invite.meeting_link} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline text-sm break-all"
-                >
-                  {invite.meeting_link}
-                </a>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Booking Information */}
-        {hasBooking && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="mr-2 h-5 w-5" />
-                Scheduled Meeting
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    {format(new Date(booking.scheduled_at), 'EEEE, MMMM d, yyyy')}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {format(new Date(booking.scheduled_at), 'h:mm a')}
-                  </p>
-                </div>
-                <Badge variant={booking.status === 'completed' ? 'default' : 'secondary'}>
-                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Action Buttons */}
-        {!user && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-muted-foreground mb-4">Sign up to book this meeting</p>
-                <Button asChild className="w-full">
-                  <Link to="/auth">Sign Up to Book</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {user && !isCreator && invite.status === 'active' && !userHasBooked && !hasBooking && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Accept This Paid Meeting</CardTitle>
-              <CardDescription>
-                Choose when you're available - you'll be paid ${invite.amount} after the meeting
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {invite.available_time_slots && invite.available_time_slots.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Choose from available time slots:</p>
-                  <div className="grid gap-2">
-                    {invite.available_time_slots.map((slot, index) => {
-                      const slotDate = new Date(slot);
-                      const isSelected = selectedDate?.toISOString() === slot;
-                      return (
-                        <Button
-                          key={index}
-                          variant={isSelected ? "default" : "outline"}
-                          onClick={() => setSelectedDate(slotDate)}
-                          className="justify-start"
-                        >
-                          {format(slotDate, 'MMM d, yyyy \'at\' h:mm a')}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <DateTimePicker
-                  date={selectedDate}
-                  setDate={setSelectedDate}
-                  placeholder="Choose date and time"
-                />
-              )}
-              <Button 
-                onClick={handleBookMeeting}
-                disabled={!selectedDate || isBooking}
-                className="w-full"
-              >
-                {isBooking ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Booking...
-                  </>
-                ) : (
-                  `Accept Meeting - Earn $${invite.amount}`
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {user && !isCreator && (userHasBooked || hasBooking) && (
-          <Card className="border-success">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center text-success">
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                <span className="font-medium">You have already booked this meeting!</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {isCreator && hasBooking && !invite.meeting_confirmed && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Confirm Meeting Completion</CardTitle>
-              <CardDescription>
-                Did the meeting happen successfully?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex space-x-4">
-                <Button
-                  onClick={handleConfirmMeeting}
-                  disabled={isConfirming}
-                  className="flex-1"
-                >
-                  {isConfirming ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Confirming...
-                    </>
+        <Tabs defaultValue="invites" className="w-full">
+          <TabsList>
+            <TabsTrigger value="invites">My Requests</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming Meetings</TabsTrigger>
+            <TabsTrigger value="past">Previous Meetings</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="invites" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Requests</CardTitle>
+                <CardDescription>Meeting requests you've created that haven't been accepted yet</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  // Show ONLY invites created by user with status 'active' (not yet accepted)
+                  const myRequestsInvites = invites.filter(invite => 
+                    invite.creator_id === user?.id && invite.status === 'active'
+                  );
+                  
+                  console.log('📊 My Requests filtering:', {
+                    allInvites: invites.length,
+                    userCreatedInvites: invites.filter(i => i.creator_id === user?.id).length,
+                    activeInvites: invites.filter(i => i.creator_id === user?.id && i.status === 'active').length,
+                    myRequestsInvites: myRequestsInvites.length,
+                    detailedInvites: invites.filter(i => i.creator_id === user?.id).map(i => ({ 
+                      id: i.id, 
+                      status: i.status, 
+                      title: i.title 
+                    }))
+                  });
+                  
+                  return myRequestsInvites.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No pending requests</p>
+                      <p className="text-xs text-muted-foreground mt-1">Once someone accepts your invite, it will move to Upcoming Meetings</p>
+                      <Button asChild className="mt-4">
+                        <Link to="/create-invite">Create Your First Request</Link>
+                      </Button>
+                    </div>
                   ) : (
-                    <>
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Yes, Release Payment
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => {
-                    // Cancel the meeting and update both invite and booking status
-                    Promise.all([
-                      supabase
-                        .from('invites')
-                        .update({ status: 'cancelled' })
-                        .eq('id', inviteId),
-                      supabase
-                        .from('bookings')
-                        .update({ status: 'cancelled' })
-                        .eq('invite_id', inviteId)
-                    ]).then(() => {
-                      toast({
-                        title: 'Meeting Cancelled',
-                        description: 'Payment hold has been released.',
-                      });
-                      fetchInvite();
-                    });
-                  }}
-                >
-                  <XCircle className="mr-2 h-4 w-4" />
-                  No, Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                    <div className="space-y-4">
+                      {myRequestsInvites.map((invite) => (
+                        <div key={invite.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{invite.title}</h3>
+                            <p className="text-sm text-muted-foreground">{invite.description}</p>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>${invite.amount} offered</span>
+                              <span>Created {format(new Date(invite.created_at), 'MMM d, yyyy')}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="secondary">Awaiting Response</Badge>
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to={`/invite/${invite.id}`}>View</Link>
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {invite.meeting_confirmed && (
-          <Card className="border-success">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center text-success">
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                <span className="font-medium">Meeting completed and payment released!</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+          <TabsContent value="upcoming" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming Meetings</CardTitle>
+                <CardDescription>Meetings that have been scheduled and are awaiting completion</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const createdAndBookedInvites = invites.filter(invite => 
+                    invite.creator_id === user?.id && 
+                    invite.status === 'booked'
+                  );
+                  
+                  const acceptedBookings = bookings.filter(booking => 
+                    booking.invitee_id === user?.id && 
+                    booking.status === 'scheduled'
+                  );
+                  
+                  console.log('📊 UPCOMING MEETINGS ANALYSIS:', {
+                    timestamp: new Date().toISOString(),
+                    userId: user?.id,
+                    totalInvites: invites.length,
+                    totalBookings: bookings.length,
+                    createdAndBookedInvites: createdAndBookedInvites.length,
+                    acceptedBookings: acceptedBookings.length,
+                    createdAndBookedDetails: createdAndBookedInvites.map(i => ({ 
+                      id: i.id, 
+                      status: i.status, 
+                      title: i.title,
+                      bookings: i.bookings?.length || 0,
+                      note: '🎯 BOOKED invites created by current user - should show here!'
+                    })),
+                    acceptedBookingDetails: acceptedBookings.map(b => ({ 
+                      id: b.id, 
+                      status: b.status, 
+                      title: b.invites?.title,
+                      note: '🎯 SCHEDULED bookings by current user - should show here!'
+                    })),
+                    allMyInviteStatuses: invites.filter(i => i.creator_id === user?.id).map(i => ({
+                      id: i.id,
+                      title: i.title,
+                      status: i.status,
+                      bookings: i.bookings?.length || 0
+                    }))
+                  });
+                  
+                  const upcomingMeetings = [
+                    // Created invites that are booked (requester view - you created the invite and someone accepted it)
+                    ...createdAndBookedInvites.map(invite => ({
+                      type: 'request',
+                      id: invite.id,
+                      title: invite.title,
+                      amount: invite.amount,
+                      scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                      status: 'booked',
+                      role: 'Requester',
+                      meeting_confirmed: invite.meeting_confirmed
+                    })),
+                    // Accepted invites (invitee view - you accepted someone's invite)
+                    ...acceptedBookings.map(booking => ({
+                      type: 'booking',
+                      id: booking.id,
+                      title: booking.invites?.title,
+                      amount: booking.invites?.amount,
+                      scheduled_at: booking.scheduled_at,
+                      status: booking.status,
+                      role: 'Invitee',
+                      meeting_confirmed: false
+                    }))
+                  ];
+
+                  return upcomingMeetings.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Clock className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No upcoming meetings scheduled</p>
+                      <p className="text-xs text-muted-foreground mt-1">When someone accepts your request or you accept someone's request, it will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {upcomingMeetings.map((meeting, index) => (
+                        <div key={`${meeting.type}-${meeting.id}-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{meeting.title}</h3>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>${meeting.amount} {meeting.role === 'Requester' ? 'paying' : 'earning'}</span>
+                              {meeting.scheduled_at && (
+                                <span>{format(new Date(meeting.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              )}
+                              <Badge variant="secondary">{meeting.role}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="default">
+                              {meeting.role === 'Requester' ? 'Awaiting Confirmation' : 'Scheduled'}
+                            </Badge>
+                            {meeting.type === 'request' && (
+                              <Button variant="outline" size="sm" asChild>
+                                <Link to={`/invite/${meeting.id}`}>
+                                  {meeting.meeting_confirmed ? 'View' : 'Confirm Meeting'}
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="past" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Previous Meetings</CardTitle>
+                <CardDescription>Completed and cancelled meetings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const pastMeetings = [
+                    // Created invites that are completed or cancelled (requester view)
+                    ...invites.filter(invite => 
+                      invite.creator_id === user?.id && 
+                      (invite.status === 'completed' || invite.status === 'cancelled')
+                    ).map(invite => ({
+                      type: 'request',
+                      id: invite.id,
+                      title: invite.title,
+                      amount: invite.amount,
+                      scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                      status: invite.status,
+                      role: 'Requester'
+                    })),
+                    // Accepted invites that are completed or cancelled (invitee view)
+                    ...bookings.filter(booking => 
+                      booking.invitee_id === user?.id && 
+                      (booking.status === 'completed' || booking.status === 'cancelled')
+                    ).map(booking => ({
+                      type: 'booking',
+                      id: booking.id,
+                      title: booking.invites?.title,
+                      amount: booking.invites?.amount,
+                      scheduled_at: booking.scheduled_at,
+                      status: booking.status,
+                      role: 'Invitee'
+                    }))
+                  ];
+
+                  return pastMeetings.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No previous meetings yet</p>
+                      <p className="text-xs text-muted-foreground mt-2">Completed and cancelled meetings will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pastMeetings.map((meeting, index) => (
+                        <div key={`${meeting.type}-${meeting.id}-${index}`} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{meeting.title}</h3>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>${meeting.amount} {meeting.role === 'Requester' ? 'paid' : 'earned'}</span>
+                              {meeting.scheduled_at && (
+                                <span>{format(new Date(meeting.scheduled_at), 'MMM d, yyyy \'at\' h:mm a')}</span>
+                              )}
+                              <Badge variant="secondary">{meeting.role}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={meeting.status === 'completed' ? 'default' : 'destructive'}>
+                              {meeting.status === 'completed' ? 'Payment Released' : 'Cancelled'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
 };
 
-export default InvitePage;
+export default Dashboard;
