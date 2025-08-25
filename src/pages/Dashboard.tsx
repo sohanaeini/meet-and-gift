@@ -118,11 +118,13 @@ const Dashboard = () => {
 
       if (bookingsError) throw bookingsError;
 
-      console.log('Dashboard data fetched:', {
-        invites: invitesData?.length || 0,
-        bookings: bookingsData?.length || 0,
-        inviteStatuses: invitesData?.map(i => ({ id: i.id, status: i.status, title: i.title }))
-      });
+        console.log('Dashboard data fetched:', {
+          user: user?.id,
+          invites: invitesData?.length || 0,
+          bookings: bookingsData?.length || 0,
+          inviteStatuses: invitesData?.map(i => ({ id: i.id, status: i.status, title: i.title, creator_id: i.creator_id })),
+          bookingStatuses: bookingsData?.map(b => ({ id: b.id, status: b.status, invitee_id: b.invitee_id }))
+        });
 
       setInvites(invitesData || []);
       setBookings(bookingsData || []);
@@ -228,6 +230,14 @@ const Dashboard = () => {
                     invite.creator_id === user?.id && invite.status === 'active'
                   );
                   
+                  console.log('My Requests filtering:', {
+                    allInvites: invites.length,
+                    userCreatedInvites: invites.filter(i => i.creator_id === user?.id).length,
+                    activeInvites: invites.filter(i => i.creator_id === user?.id && i.status === 'active').length,
+                    myRequestsInvites: myRequestsInvites.length,
+                    detailedInvites: invites.filter(i => i.creator_id === user?.id).map(i => ({ id: i.id, status: i.status, title: i.title }))
+                  });
+                  
                   return myRequestsInvites.length === 0 ? (
                     <div className="text-center py-8">
                       <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -272,12 +282,28 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 {(() => {
+                  const createdAndBookedInvites = invites.filter(invite => 
+                    invite.creator_id === user?.id && 
+                    invite.status === 'booked'
+                  );
+                  
+                  const acceptedBookings = bookings.filter(booking => 
+                    booking.invitee_id === user?.id && 
+                    booking.status === 'scheduled'
+                  );
+                  
+                  console.log('Upcoming Meetings filtering:', {
+                    totalInvites: invites.length,
+                    totalBookings: bookings.length,
+                    createdAndBookedInvites: createdAndBookedInvites.length,
+                    acceptedBookings: acceptedBookings.length,
+                    createdAndBookedDetails: createdAndBookedInvites.map(i => ({ id: i.id, status: i.status, title: i.title })),
+                    acceptedBookingDetails: acceptedBookings.map(b => ({ id: b.id, status: b.status, invites: b.invites }))
+                  });
+                  
                   const upcomingMeetings = [
                     // Created invites that are booked (requester view - you created the invite and someone accepted it)
-                    ...invites.filter(invite => 
-                      invite.creator_id === user?.id && 
-                      invite.status === 'booked'
-                    ).map(invite => ({
+                    ...createdAndBookedInvites.map(invite => ({
                       type: 'request',
                       id: invite.id,
                       title: invite.title,
@@ -288,10 +314,7 @@ const Dashboard = () => {
                       meeting_confirmed: invite.meeting_confirmed
                     })),
                     // Accepted invites (invitee view - you accepted someone's invite)
-                    ...bookings.filter(booking => 
-                      booking.invitee_id === user?.id && 
-                      booking.status === 'scheduled'
-                    ).map(booking => ({
+                    ...acceptedBookings.map(booking => ({
                       type: 'booking',
                       id: booking.id,
                       title: booking.invites?.title,
