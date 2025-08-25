@@ -83,6 +83,45 @@ const Dashboard = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user]);
 
+  // Add realtime listeners for automatic dashboard updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('dashboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invites',
+          filter: `creator_id=eq.${user.id}`
+        },
+        () => {
+          console.log('📡 Realtime update: invites changed, refreshing dashboard...');
+          fetchData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `invitee_id=eq.${user.id}`
+        },
+        () => {
+          console.log('📡 Realtime update: bookings changed, refreshing dashboard...');
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const fetchData = async () => {
     setLoadingData(true);
     try {
