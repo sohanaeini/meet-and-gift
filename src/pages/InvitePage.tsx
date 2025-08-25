@@ -89,7 +89,20 @@ const InvitePage = () => {
 
     setIsBooking(true);
     try {
-      // Create booking with 'scheduled' status
+      // Update invite status to 'booked' FIRST to ensure it immediately moves to "Upcoming Meetings"
+      const { error: updateError } = await supabase
+        .from('invites')
+        .update({ status: 'booked' })
+        .eq('id', inviteId);
+
+      if (updateError) {
+        console.error('❌ ERROR updating invite status to booked:', updateError);
+        throw updateError;
+      }
+
+      console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
+
+      // Now create the booking
       const { error: bookingError } = await supabase
         .from('bookings')
         .insert([
@@ -97,11 +110,18 @@ const InvitePage = () => {
             invite_id: inviteId,
             invitee_id: user.id,
             scheduled_at: selectedDate.toISOString(),
-            status: 'scheduled' // Explicitly set booking status
+            status: 'scheduled'
           }
         ]);
 
       if (bookingError) {
+        // If booking creation fails, revert invite status back to active
+        console.error('❌ ERROR creating booking, reverting invite status:', bookingError);
+        await supabase
+          .from('invites')
+          .update({ status: 'active' })
+          .eq('id', inviteId);
+          
         if (bookingError.code === '23505') {
           // Unique constraint violation - user already booked
           toast({
@@ -115,27 +135,6 @@ const InvitePage = () => {
         }
         throw bookingError;
       }
-
-      console.log('🔄 ATTEMPTING TO UPDATE INVITE STATUS...', {
-        inviteId,
-        newStatus: 'booked',
-        currentUser: user?.id
-      });
-
-      // Update invite status to 'booked' (triggers database sync for both users)
-      const { error: updateError } = await supabase
-        .from('invites')
-        .update({ status: 'booked' })
-        .eq('id', inviteId);
-
-      if (updateError) {
-        console.error('❌ ERROR updating invite status:', updateError);
-        throw updateError;
-      }
-
-      console.log('✅ SUCCESS: Updated invite status to BOOKED for invite:', inviteId);
-      console.log('✅ This invite should now appear in UPCOMING MEETINGS for both creator and invitee');
-      console.log('🔄 Refreshing invite data to confirm status update...');
 
       toast({
         title: 'Success!',
