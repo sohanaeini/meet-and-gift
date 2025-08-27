@@ -14,6 +14,8 @@ interface Invite {
   title: string;
   description: string;
   amount: number;
+  currency: string;
+  duration_minutes: number;
   status: string;
   created_at: string;
   creator_id: string;
@@ -27,8 +29,15 @@ interface Booking {
   status: string;
   invitee_id: string;
   invites?: {
+    id: string;
     title: string;
+    description: string;
     amount: number;
+    currency: string;
+    duration_minutes: number;
+    status: string;
+    creator_id: string;
+    meeting_confirmed: boolean;
   };
 }
 
@@ -204,14 +213,21 @@ const Dashboard = () => {
 
       if (invitesError) throw invitesError;
 
-      // Fetch user's bookings
+      // Fetch user's bookings with full invite details
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
           *,
           invites(
+            id,
             title,
-            amount
+            description,
+            amount,
+            currency,
+            duration_minutes,
+            status,
+            creator_id,
+            meeting_confirmed
           )
         `)
         .eq('invitee_id', user.id)
@@ -435,30 +451,36 @@ const Dashboard = () => {
                     }))
                   });
                   
-                  const upcomingMeetings = [
-                    // Created invites that are booked (requester view - you created the invite and someone accepted it)
-                    ...createdAndBookedInvites.map(invite => ({
-                      type: 'request',
-                      id: invite.id,
-                      title: invite.title,
-                      amount: invite.amount,
-                      scheduled_at: invite.bookings?.[0]?.scheduled_at,
-                      status: 'booked',
-                      role: 'Requester',
-                      meeting_confirmed: invite.meeting_confirmed
-                    })),
-                    // Accepted invites (invitee view - you accepted someone's invite)
-                    ...acceptedBookings.map(booking => ({
-                      type: 'booking',
-                      id: booking.id,
-                      title: booking.invites?.title,
-                      amount: booking.invites?.amount,
-                      scheduled_at: booking.scheduled_at,
-                      status: booking.status,
-                      role: 'Invitee',
-                      meeting_confirmed: false
-                    }))
-                  ];
+                   const upcomingMeetings = [
+                     // Created invites that are booked (requester view - you created the invite and someone accepted it)
+                     ...createdAndBookedInvites.map(invite => ({
+                       type: 'request',
+                       id: invite.id,
+                       title: invite.title,
+                       description: invite.description,
+                       amount: invite.amount,
+                       currency: 'USD', // From invite data
+                       duration_minutes: invite.duration_minutes || 60,
+                       scheduled_at: invite.bookings?.[0]?.scheduled_at,
+                       status: 'booked',
+                       role: 'Requester',
+                       meeting_confirmed: invite.meeting_confirmed
+                     })),
+                     // Accepted invites (invitee view - you accepted someone's invite)
+                     ...acceptedBookings.map(booking => ({
+                       type: 'booking',
+                       id: booking.id,
+                       title: booking.invites?.title,
+                       description: booking.invites?.description,
+                       amount: booking.invites?.amount,
+                       currency: booking.invites?.currency || 'USD',
+                       duration_minutes: booking.invites?.duration_minutes || 60,
+                       scheduled_at: booking.scheduled_at,
+                       status: booking.status,
+                       role: 'Invitee',
+                       meeting_confirmed: booking.invites?.meeting_confirmed || false
+                     }))
+                   ];
 
                   return upcomingMeetings.length === 0 ? (
                     <div className="text-center py-8">
@@ -518,7 +540,10 @@ const Dashboard = () => {
                       type: 'request',
                       id: invite.id,
                       title: invite.title,
+                      description: invite.description,
                       amount: invite.amount,
+                      currency: invite.currency || 'USD',
+                      duration_minutes: invite.duration_minutes || 60,
                       scheduled_at: invite.bookings?.[0]?.scheduled_at,
                       status: invite.status,
                       role: 'Requester'
@@ -531,7 +556,10 @@ const Dashboard = () => {
                       type: 'booking',
                       id: booking.id,
                       title: booking.invites?.title,
+                      description: booking.invites?.description,
                       amount: booking.invites?.amount,
+                      currency: booking.invites?.currency || 'USD',
+                      duration_minutes: booking.invites?.duration_minutes || 60,
                       scheduled_at: booking.scheduled_at,
                       status: booking.status,
                       role: 'Invitee'
